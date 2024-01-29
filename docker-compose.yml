@@ -11,6 +11,69 @@ services:
     volumes:
       - ./php/app:/var/www
       - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    environment:
+      CONTAINER_TYPE: app
+    entrypoint: ["sh", "start.sh"]
+    networks:
+      - app-network
+  dividend-worker:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    tty: true
+    working_dir: /var/www
+    volumes:
+      - ./php/app:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    environment:
+      CONTAINER_TYPE: dividend
+    entrypoint: ["sh", "start.sh"]
+    networks:
+      - app-network
+  emails-worker:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    tty: true
+    working_dir: /var/www
+    volumes:
+      - ./php/app:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    environment:
+      CONTAINER_TYPE: emails
+    entrypoint: ["sh", "start.sh"]
+    networks:
+      - app-network
+  simulation-worker:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    tty: true
+    working_dir: /var/www
+    volumes:
+      - ./php/app:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    environment:
+      CONTAINER_TYPE: simulation
+    entrypoint: ["sh", "start.sh"]
+    networks:
+      - app-network
+  websocket:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    tty: true
+    working_dir: /var/www
+    volumes:
+      - ./php/app:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    environment:
+      CONTAINER_TYPE: websocket
+    entrypoint: ["sh", "start.sh"]
     networks:
       - app-network
   node:
@@ -21,6 +84,16 @@ services:
     tty: true
     ports:
       - "3000:3000"
+    networks:
+      - app-network
+  laravel-echo-server:
+    build:
+      context: ./laravel-echo-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "6001:6001"
     networks:
       - app-network
   nginx:
