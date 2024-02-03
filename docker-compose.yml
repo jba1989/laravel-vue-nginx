@@ -11,6 +11,7 @@ services:
     volumes:
       - ./php/app:/var/www
       - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - ./start.sh:/var/www/start.sh
     environment:
       CONTAINER_TYPE: app
     entrypoint: ["sh", "start.sh"]
@@ -26,6 +27,7 @@ services:
     volumes:
       - ./php/app:/var/www
       - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - ./start.sh:/var/www/start.sh
     environment:
       CONTAINER_TYPE: dividend
     entrypoint: ["sh", "start.sh"]
@@ -41,6 +43,7 @@ services:
     volumes:
       - ./php/app:/var/www
       - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - ./start.sh:/var/www/start.sh
     environment:
       CONTAINER_TYPE: emails
     entrypoint: ["sh", "start.sh"]
@@ -56,6 +59,7 @@ services:
     volumes:
       - ./php/app:/var/www
       - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - ./start.sh:/var/www/start.sh
     environment:
       CONTAINER_TYPE: simulation
     entrypoint: ["sh", "start.sh"]
@@ -71,6 +75,7 @@ services:
     volumes:
       - ./php/app:/var/www
       - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - ./start.sh:/var/www/start.sh
     environment:
       CONTAINER_TYPE: websocket
     entrypoint: ["sh", "start.sh"]
