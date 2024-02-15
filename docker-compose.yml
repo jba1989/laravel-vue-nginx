@@ -107,6 +107,7 @@ services:
     tty: true
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./nginx/logs:/var/log/nginx
@@ -123,6 +124,7 @@ services:
       - "6379:6379"
     volumes:
       - ./redis:/data
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     networks:
       - app-network
   mysql:
