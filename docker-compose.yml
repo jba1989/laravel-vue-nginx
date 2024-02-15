@@ -111,6 +111,7 @@ services:
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./nginx/logs:/var/log/nginx
+      - ./nginx/.ssh:/ssh
     depends_on:
       - php
       - node
