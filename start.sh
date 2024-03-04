@@ -8,7 +8,7 @@ if [ "$type" = "app" ]; then
     exec php-fpm
 elif [ "$type" = "dividend" ]; then
     echo "Running the queue: dividend"
-    php artisan queue:work --verbose --queue=get:dividend --sleep=300 --tries=0
+    php artisan queue:work redis --verbose --queue=get:dividend --sleep=300 --tries=0
 elif [ "$type" = "emails" ]; then
     echo "Running the queue: emails"
     php artisan queue:work --verbose --queue=emails --sleep=10 --tries=1
@@ -19,9 +19,10 @@ elif [ "$type" = "websocket" ]; then
     echo "Running the queue: websocket"
     php artisan queue:work redis --verbose --queue=websocket
 elif [ "$type" = "scheduler" ]; then
+    echo "Running the scheduler"
     while [ true ]
     do
-      php artisan schedule:run --verbose --no-interaction &
+      php artisan schedule:run >> /dev/null 2>&1 --verbose --no-interaction &
       sleep 60
     done
 else
