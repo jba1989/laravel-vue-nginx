@@ -15,6 +15,9 @@ services:
     environment:
       CONTAINER_TYPE: app
     entrypoint: ["sh", "start.sh"]
+    depends_on:
+      - mysql
+      - redis
     networks:
       - app-network
   scheduler-worker:
@@ -31,6 +34,9 @@ services:
     environment:
       CONTAINER_TYPE: scheduler
     entrypoint: ["sh", "start.sh"]
+    depends_on:
+      - mysql
+      - redis
     networks:
       - app-network
   dividend-worker:
@@ -47,6 +53,9 @@ services:
     environment:
       CONTAINER_TYPE: dividend
     entrypoint: ["sh", "start.sh"]
+    depends_on:
+      - mysql
+      - redis
     networks:
       - app-network
   emails-worker:
@@ -63,6 +72,9 @@ services:
     environment:
       CONTAINER_TYPE: emails
     entrypoint: ["sh", "start.sh"]
+    depends_on:
+      - mysql
+      - redis
     networks:
       - app-network
   simulation-worker:
@@ -79,6 +91,9 @@ services:
     environment:
       CONTAINER_TYPE: simulation
     entrypoint: ["sh", "start.sh"]
+    depends_on:
+      - mysql
+      - redis
     networks:
       - app-network
   websocket:
@@ -95,6 +110,9 @@ services:
     environment:
       CONTAINER_TYPE: websocket
     entrypoint: ["sh", "start.sh"]
+    depends_on:
+      - php
+      - redis
     networks:
       - app-network
   node:
@@ -115,6 +133,8 @@ services:
     tty: true
     ports:
       - "6001:6001"
+    depends_on:
+      - redis
     networks:
       - app-network
   nginx:
