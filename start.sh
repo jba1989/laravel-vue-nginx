@@ -8,7 +8,7 @@ if [ "$type" = "app" ]; then
     exec php-fpm
 elif [ "$type" = "request" ]; then
     echo "Running the queue: request"
-    php artisan queue:work redis --verbose --queue=get:request --sleep=3 --tries=0
+    php artisan queue:work redis --verbose --queue=request --sleep=3 --tries=0
 elif [ "$type" = "emails" ]; then
     echo "Running the queue: emails"
     php artisan queue:work --verbose --queue=emails --sleep=10 --tries=1
