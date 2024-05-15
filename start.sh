@@ -6,9 +6,9 @@ type=${CONTAINER_TYPE:-app}
 
 if [ "$type" = "app" ]; then
     exec php-fpm
-elif [ "$type" = "dividend" ]; then
-    echo "Running the queue: dividend"
-    php artisan queue:work redis --verbose --queue=get:dividend --sleep=300 --tries=0
+elif [ "$type" = "request" ]; then
+    echo "Running the queue: request"
+    php artisan queue:work redis --verbose --queue=get:request --sleep=3 --tries=0
 elif [ "$type" = "emails" ]; then
     echo "Running the queue: emails"
     php artisan queue:work --verbose --queue=emails --sleep=10 --tries=1

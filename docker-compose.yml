@@ -19,7 +19,7 @@ services:
       - mysql
       - redis
     networks:
-      - app-network
+      - stock-network
   scheduler-worker:
     build:
       context: ./php
@@ -38,8 +38,8 @@ services:
       - mysql
       - redis
     networks:
-      - app-network
-  dividend-worker:
+      - stock-network
+  request-worker:
     build:
       context: ./php
       dockerfile: Dockerfile
@@ -51,13 +51,13 @@ services:
       - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
       - ./start.sh:/var/www/start.sh
     environment:
-      CONTAINER_TYPE: dividend
+      CONTAINER_TYPE: request
     entrypoint: ["sh", "start.sh"]
     depends_on:
       - mysql
       - redis
     networks:
-      - app-network
+      - stock-network
   emails-worker:
     build:
       context: ./php
@@ -76,7 +76,7 @@ services:
       - mysql
       - redis
     networks:
-      - app-network
+      - stock-network
   simulation-worker:
     build:
       context: ./php
@@ -95,7 +95,7 @@ services:
       - mysql
       - redis
     networks:
-      - app-network
+      - stock-network
   websocket:
     build:
       context: ./php
@@ -114,7 +114,7 @@ services:
       - php
       - redis
     networks:
-      - app-network
+      - stock-network
   node:
     build:
       context: ./node
@@ -124,7 +124,7 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - app-network
+      - stock-network
   laravel-echo-server:
     build:
       context: ./laravel-echo-server
@@ -136,14 +136,11 @@ services:
     depends_on:
       - redis
     networks:
-      - app-network
+      - stock-network
   nginx:
     image: nginx:latest
     restart: unless-stopped
     tty: true
-    ports:
-      - "80:80"
-      - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./nginx/logs:/var/log/nginx
@@ -152,7 +149,15 @@ services:
       - php
       - node
     networks:
-      - app-network
+      - stock-network
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      # open tls and use websecure entrypoint
+      - "traefik.http.routers.nginx.tls=true"
+      - "traefik.http.routers.nginx.rule=Host(`${HOST}`)"
+      - "traefik.http.routers.nginx.entrypoints=websecure"
+      - "traefik.http.services.nginx.loadbalancer.server.port=80"
   redis:
     image: redis:latest
     restart: unless-stopped
@@ -163,7 +168,7 @@ services:
       - ./redis:/data
     command: redis-server --requirepass ${REDIS_PASSWORD}
     networks:
-      - app-network
+      - stock-network
   mysql:
     image: mysql:8.0.35
     restart: unless-stopped
@@ -178,8 +183,10 @@ services:
     volumes:
       - ./mysql:/var/lib/mysql
     networks:
-      - app-network
+      - stock-network
 
 networks:
-  app-network:
-    driver: bridge
+  stock-network:
+    external: true
+  traefik-network:
+    external: true
