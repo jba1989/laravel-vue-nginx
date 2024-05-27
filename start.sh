@@ -8,16 +8,16 @@ if [ "$type" = "app" ]; then
     exec php-fpm
 elif [ "$type" = "request" ]; then
     echo "Running the queue: request"
-    php artisan queue:work redis --verbose --queue=request --sleep=3 --tries=0
+    php artisan queue:listen redis --verbose --queue=request --sleep=3 --tries=0
 elif [ "$type" = "emails" ]; then
     echo "Running the queue: emails"
-    php artisan queue:work --verbose --queue=emails --sleep=10 --tries=1
+    php artisan queue:listen --verbose --queue=emails --sleep=10 --tries=1
 elif [ "$type" = "simulation" ]; then
     echo "Running the queue: simulation"
-    php artisan queue:work --verbose --queue=simulation --sleep=10 --tries=0
+    php artisan queue:listen --verbose --queue=simulation --sleep=10 --tries=0
 elif [ "$type" = "websocket" ]; then
     echo "Running the queue: websocket"
-    php artisan queue:work redis --verbose --queue=websocket
+    php artisan queue:listen redis --verbose --queue=websocket
 elif [ "$type" = "scheduler" ]; then
     echo "Running the scheduler"
     while [ true ]
