@@ -8,10 +8,13 @@ if [ "$type" = "app" ]; then
     exec php-fpm
 elif [ "$type" = "request" ]; then
     echo "Running the queue: request"
-    php artisan queue:listen redis --verbose --queue=request --sleep=3 --tries=0
+    php artisan queue:listen redis --verbose --queue=request --sleep=20 --tries=0
 elif [ "$type" = "emails" ]; then
     echo "Running the queue: emails"
-    php artisan queue:listen --verbose --queue=emails --sleep=10 --tries=1
+    php artisan queue:listen --verbose --queue=emails --sleep=10 --tries=2
+elif [ "$type" = "default" ]; then
+    echo "Running the queue: default"
+    php artisan queue:listen --verbose --queue=default --sleep=30 --tries=2
 elif [ "$type" = "simulation" ]; then
     echo "Running the queue: simulation"
     php artisan queue:listen --verbose --queue=simulation --sleep=10 --tries=0

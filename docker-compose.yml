@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   php:
     build:
@@ -78,6 +76,25 @@ services:
       - redis
     networks:
       - internal-network
+  default-worker:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    restart: always
+    tty: true
+    working_dir: /var/www
+    volumes:
+      - ./php/app:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - ./start.sh:/var/www/start.sh
+    environment:
+      CONTAINER_TYPE: default
+    entrypoint: [ "sh", "start.sh" ]
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - internal-network
   simulation-worker:
     build:
       context: ./php
@@ -144,7 +161,7 @@ services:
     tty: true
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./nginx/logs:/var/log/nginx
+      # - ./nginx/logs:/var/log/nginx
       - ./nginx/.ssh:/ssh
     depends_on:
       - php
