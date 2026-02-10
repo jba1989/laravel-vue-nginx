@@ -37,6 +37,25 @@ services:
       - redis
     networks:
       - internal-network
+  reverb:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    restart: always
+    tty: true
+    working_dir: /var/www
+    volumes:
+      - ./php/app:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - ./start.sh:/var/www/start.sh
+    environment:
+      CONTAINER_TYPE: reverb
+    entrypoint: [ "sh", "start.sh" ]
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - internal-network
   request-worker:
     build:
       context: ./php
@@ -143,26 +162,14 @@ services:
     #   - "3000:3000"
     networks:
       - internal-network
-  laravel-echo-server:
-    build:
-      context: ./laravel-echo-server
-      dockerfile: Dockerfile
-    restart: always
-    tty: true
-    # ports:
-    #   - "6001:6001"
-    depends_on:
-      - redis
-    networks:
-      - internal-network
   nginx:
     image: nginx:latest
     restart: always
     tty: true
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
       # - ./nginx/logs:/var/log/nginx
-      - ./nginx/.ssh:/ssh
+      - ./nginx/.ssh:/ssh:ro
     depends_on:
       - php
       - node
@@ -174,7 +181,8 @@ services:
       # open tls and use websecure entrypoint
       - "traefik.http.routers.nginx.tls=true"
       - "traefik.http.routers.nginx.rule=Host(`${HOST}`)"
-      - "traefik.http.routers.nginx.entrypoints=websecure"
+      - "traefik.http.routers.nginx.entrypoints=websecure,web"
+      - "traefik.http.routers.nginx.service=nginx"
       - "traefik.http.services.nginx.loadbalancer.server.port=80"
   redis:
     image: redis:latest
@@ -200,6 +208,7 @@ services:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
     volumes:
       - ./mysql:/var/lib/mysql
+      - ./my.cnf:/etc/mysql/conf.d/my.cnf
     networks:
       - internal-network
 

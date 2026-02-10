@@ -18,9 +18,12 @@ elif [ "$type" = "default" ]; then
 elif [ "$type" = "simulation" ]; then
     echo "Running the queue: simulation"
     php artisan queue:work --verbose --queue=simulation --sleep=10 --tries=0
+elif [ "$type" = "reverb" ]; then
+    echo "Running Reverb WebSocket server"
+    php artisan reverb:start --host=0.0.0.0 --port=8080
 elif [ "$type" = "websocket" ]; then
     echo "Running the queue: websocket"
-    php artisan queue:work redis --verbose --queue=websocket
+    php artisan queue:work --verbose --queue=websocket
 elif [ "$type" = "scheduler" ]; then
     echo "Running the scheduler"
     while [ true ]
