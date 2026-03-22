@@ -1,0 +1,344 @@
+// ============================================================
+// SECTION 1: Docker Container Discovery
+// ============================================================
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Turn Docker metadata into stable labels for querying in VictoriaLogs.
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    replacement   = "$1"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "compose_project"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  // Don't ingest Alloy's own logs.
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "alloy"
+    action        = "drop"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_image"]
+    target_label  = "image"
+  }
+}
+
+// ============================================================
+// SECTION 2: Docker Log Source
+// ============================================================
+
+loki.source.docker "containers" {
+  host    = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.containers.output
+  labels = {
+    job  = "docker",
+    host = sys.env("LOG_HOSTNAME"),
+  }
+  forward_to = [loki.process.docker.receiver]
+}
+
+// ============================================================
+// SECTION 3: Main Processing Pipeline
+// ============================================================
+
+loki.process "docker" {
+  // Unwrap Docker log envelope (sets timestamp + log line).
+  stage.docker {}
+
+  // ----------------------------------------------------------
+  // NGINX ACCESS LOG (JSON, stdout) — lines starting with "{"
+  //
+  // Format set by log_format json_main in nginx/conf.d/site.conf.
+  // Parses request timing, generates Prometheus metrics, keeps
+  // only 4xx/5xx entries in VictoriaLogs.
+  // ----------------------------------------------------------
+  stage.match {
+    selector = `{service="nginx"} |~ "^\\{"`
+
+    stage.json {
+      expressions = {
+        method                 = "method",
+        uri                    = "uri",
+        status                 = "status",
+        request_time           = "request_time",
+        upstream_response_time = "upstream_response_time",
+        remote_addr            = "remote_addr",
+      }
+    }
+
+    stage.labels {
+      values = {
+        method      = "method",
+        status      = "status",
+        remote_addr = "remote_addr",
+      }
+    }
+
+    // Prometheus metrics exposed at Alloy's :12345/metrics endpoint.
+    // Scrape with Prometheus / VictoriaMetrics to build dashboards.
+    stage.metrics {
+      metric.histogram {
+        name        = "nginx_request_duration_seconds"
+        description = "HTTP request duration in seconds"
+        source      = "request_time"
+        buckets     = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+      }
+      metric.counter {
+        name        = "nginx_http_requests_total"
+        description = "Total HTTP requests by method and status"
+        match_all   = true
+        action      = "inc"
+      }
+    }
+
+    // Mark 4xx/5xx with level=error so Grafana colour-codes them.
+    stage.match {
+      selector = `{service="nginx", status=~"[45][0-9][0-9]"}`
+      stage.static_labels {
+        values = { level = "Error" }
+      }
+    }
+
+    // Drop 2xx/3xx — not useful for log search.
+    stage.match {
+      selector            = `{service="nginx", status!~"[45][0-9][0-9]"}`
+      action              = "drop"
+      drop_counter_reason = "nginx_non_error_status"
+    }
+  }
+
+  // ----------------------------------------------------------
+  // NGINX ERROR LOG (text, stderr) — lines NOT starting with "{"
+  //
+  // Format: 2026/03/22 04:12:31 [error] 1#1: message
+  // Levels: debug < info < notice < warn < error < crit < alert < emerg
+  // ----------------------------------------------------------
+  stage.match {
+    selector = `{service="nginx"} !~ "^\\{"`
+
+    stage.decolorize {}
+
+    stage.regex {
+      expression = `\[(?P<level_raw>debug|info|notice|warn|error|crit|alert|emerg)\]`
+    }
+
+    stage.template {
+      source   = "level"
+      template = `{{ if eq .level_raw "emerg" }}Emergency{{ else if eq .level_raw "alert" }}Alert{{ else if eq .level_raw "crit" }}Critical{{ else if eq .level_raw "error" }}Error{{ else if eq .level_raw "warn" }}Warning{{ else if eq .level_raw "notice" }}Notice{{ else if eq .level_raw "info" }}Info{{ else if eq .level_raw "debug" }}Debug{{ else }}{{ .level_raw }}{{ end }}`
+    }
+
+    stage.labels {
+      values = { level = "level" }
+    }
+
+    // Drop debug and info — not actionable.
+    stage.match {
+      selector            = `{service="nginx"} !~ "\\[(warn|error|crit|alert|emerg)\\]"`
+      action              = "drop"
+      drop_counter_reason = "nginx_error_log_below_warn"
+    }
+  }
+
+  // ----------------------------------------------------------
+  // LARAVEL (php / reverb containers): error logs + runner INFO
+  //
+  // Laravel stderr channel outputs to Docker logs.
+  // Format: [YYYY-MM-DD HH:MM:SS] env.LEVEL: message
+  // ----------------------------------------------------------
+  stage.match {
+    selector = `{service=~"php|reverb"}`
+
+    stage.regex {
+      expression = `\] \w+\.(?P<level_raw>DEBUG|INFO|WARNING|ERROR|CRITICAL|ALERT|EMERGENCY):`
+    }
+
+    stage.template {
+      source   = "level"
+      template = `{{ if eq .level_raw "EMERGENCY" }}Emergency{{ else if eq .level_raw "ALERT" }}Alert{{ else if eq .level_raw "CRITICAL" }}Critical{{ else if eq .level_raw "ERROR" }}Error{{ else if eq .level_raw "WARNING" }}Warning{{ else if eq .level_raw "INFO" }}Info{{ else if eq .level_raw "DEBUG" }}Debug{{ else }}{{ .level_raw }}{{ end }}`
+    }
+
+    stage.labels {
+      values = { level = "level" }
+    }
+
+    // Drop Debug — too noisy, not actionable.
+    stage.match {
+      selector            = `{service=~"php|reverb", level="Debug"}`
+      action              = "drop"
+      drop_counter_reason = "laravel_debug_filtered"
+    }
+
+    // Drop lines with no recognised Laravel log level (framework/boot noise).
+    stage.match {
+      selector            = `{service=~"php|reverb"} !~ "\\] \\w+\\.(DEBUG|INFO|WARNING|ERROR|CRITICAL|ALERT|EMERGENCY):"`
+      action              = "drop"
+      drop_counter_reason = "laravel_no_level"
+    }
+  }
+
+  // ----------------------------------------------------------
+  // NODE (Nuxt): strip ANSI colour codes, extract level
+  //
+  // Nuxt emits styled terminal output, e.g.:
+  //   [41m[30m ERROR [39m[49m connect ECONNREFUSED 127.0.0.1:443
+  // After decolorize: ERROR connect ECONNREFUSED …
+  // ----------------------------------------------------------
+  stage.match {
+    selector = `{service="node"}`
+
+    stage.decolorize {}
+
+    // Match Nuxt/Node level keyword at the start of the line (may have leading spaces).
+    stage.regex {
+      expression = `(?i)^\s*(?P<level_raw>ERROR|WARN|INFO|DEBUG|FATAL)\b`
+    }
+
+    stage.template {
+      source   = "level"
+      template = `{{ $l := .level_raw | lower }}{{ if eq $l "error" }}Error{{ else if eq $l "warn" }}Warning{{ else if eq $l "info" }}Info{{ else if eq $l "debug" }}Debug{{ else if eq $l "fatal" }}Fatal{{ else }}{{ .level_raw }}{{ end }}`
+    }
+
+    stage.labels {
+      values = { level = "level" }
+    }
+  }
+
+  // ----------------------------------------------------------
+  // TRAEFIK: strip ANSI codes, normalise 3-letter level abbreviations
+  //
+  // Log format (after decolorize):
+  //   2026-03-22T04:12:31Z WRN Failed to inspect container …
+  // Abbreviated levels: TRC DBG INF WRN ERR FTL
+  // ----------------------------------------------------------
+  stage.match {
+    selector = `{service="traefik"}`
+
+    stage.decolorize {}
+
+    // Capture 3-letter level token between ISO timestamp and message.
+    stage.regex {
+      expression = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z (?P<level_raw>TRC|DBG|INF|WRN|ERR|FTL) `
+    }
+
+    // Map abbreviated levels to standard names Grafana recognises.
+    stage.template {
+      source   = "level"
+      template = `{{ if eq .level_raw "WRN" }}Warning{{ else if eq .level_raw "ERR" }}Error{{ else if eq .level_raw "INF" }}Info{{ else if eq .level_raw "DBG" }}Debug{{ else if eq .level_raw "TRC" }}Trace{{ else if eq .level_raw "FTL" }}Fatal{{ else }}{{ .level_raw }}{{ end }}`
+    }
+
+    stage.labels {
+      values = { level = "level" }
+    }
+
+    // Drop trace, debug, info — only warn and above for Traefik.
+    stage.match {
+      selector            = `{service="traefik", level=~"Trace|Debug|Info"}`
+      action              = "drop"
+      drop_counter_reason = "traefik_below_warn"
+    }
+  }
+
+  // ----------------------------------------------------------
+  // MYSQL: extract level from bracketed token
+  //
+  // Format: 2026-03-22T05:20:57Z 0 [Warning] [MY-010068] [Server] msg
+  // Levels (already Title Case): Note, Warning, Error, System
+  // ----------------------------------------------------------
+  stage.match {
+    selector = `{service="mysql"}`
+
+    stage.regex {
+      expression = `\[(?P<level>Note|Warning|Error|System)\]`
+    }
+
+    stage.labels {
+      values = { level = "level" }
+    }
+  }
+
+  // ----------------------------------------------------------
+  // ALL OTHER services (redis, …):
+  // keep only warning-and-above messages.
+  // nginx, php, reverb, node, traefik, mysql already handled above.
+  // ----------------------------------------------------------
+  stage.match {
+    selector            = `{service!~"nginx|php|reverb|node|traefik|mysql"} !~ "(?i)\\b(warn|warning|error|fatal|panic|critical|alert|emerg|emergency)\\b"`
+    action              = "drop"
+    drop_counter_reason = "non_warning_or_higher"
+  }
+
+  forward_to = [loki.write.victorialogs.receiver]
+}
+
+// ============================================================
+// SECTION 4: MySQL Slow Query Log (file source)
+//
+// Slow log is a multi-line format; each entry starts with "# Time:".
+// Read directly from the shared volume — not via Docker logs.
+//
+// Entry example:
+//   # Time: 2026-03-22T05:20:57.231509Z
+//   # User@Host: laravel[laravel] @ [172.20.0.5]  Id: 123
+//   # Query_time: 2.345678  Lock_time: 0.000123 Rows_sent: 100  Rows_examined: 1000000
+//   SET timestamp=1711077657;
+//   SELECT * FROM stocks WHERE ...;
+// ============================================================
+
+loki.source.file "mysql_slowlog" {
+  targets = [{
+    __path__ = "/var/log/mysql/slow.log",
+    job      = "mysql_slowlog",
+    host     = sys.env("LOG_HOSTNAME"),
+    service  = "mysql",
+  }]
+  forward_to = [loki.process.mysql_slowlog.receiver]
+}
+
+loki.process "mysql_slowlog" {
+  // Merge lines belonging to the same slow query entry.
+  stage.multiline {
+    firstline     = `^# Time:`
+    max_wait_time = "3s"
+  }
+
+  stage.static_labels {
+    values = {
+      log_type = "slow_query",
+      level    = "Warning",
+    }
+  }
+
+  forward_to = [loki.write.victorialogs.receiver]
+}
+
+// ============================================================
+// SECTION 5: VictoriaLogs Output
+// ============================================================
+
+loki.write "victorialogs" {
+  endpoint {
+    url = sys.env("VLOGS_PUSH_URL")
+
+    basic_auth {
+      username = sys.env("VLOGS_USERNAME")
+      password = sys.env("VLOGS_PASSWORD")
+    }
+  }
+}

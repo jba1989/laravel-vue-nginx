@@ -75,7 +75,7 @@ services:
       - redis
     networks:
       - internal-network
-      - stock-network # external network
+      # - stock-network # external network
   emails-worker:
     build:
       context: ./php
@@ -209,13 +209,35 @@ services:
     volumes:
       - ./mysql:/var/lib/mysql
       - ./my.cnf:/etc/mysql/conf.d/my.cnf
+      - mysql-slowlog:/var/log/mysql
     networks:
       - internal-network
 
+  alloy:
+    image: grafana/alloy:latest
+    restart: always
+    user: "0:0"
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --server.http.listen-addr=0.0.0.0:12345
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+      - mysql-slowlog:/var/log/mysql:ro
+    environment:
+      VLOGS_PUSH_URL: ${VLOGS_PUSH_URL:-https://victorialogs.example.com/insert/loki/api/v1/push}
+      VLOGS_USERNAME: ${VLOGS_USERNAME:-change-me}
+      VLOGS_PASSWORD: ${VLOGS_PASSWORD:-change-me}
+      LOG_HOSTNAME: ${LOG_HOSTNAME:-local-docker-host}
 networks:
   internal-network:
     driver: bridge
-  stock-network:
-    external: true
   traefik-network:
     external: true
+
+volumes:
+  alloy-data:
+  mysql-slowlog:
