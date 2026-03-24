@@ -282,8 +282,8 @@ loki.process "docker" {
 
     stage.metrics {
       metric.histogram {
-        name        = "wordpress_request_duration_seconds"
-        description = "WordPress HTTP request duration in seconds (from bytes_sent proxy)"
+        name        = "wordpress_response_size_bytes"
+        description = "WordPress HTTP response size in bytes"
         source      = "bytes_sent"
         buckets     = [256, 512, 1024, 4096, 16384, 65536, 262144, 1048576]
       }
@@ -348,7 +348,7 @@ loki.process "docker" {
     // Default to "Info" when no bracketed level token is found.
     stage.template {
       source   = "level"
-      template = `{{ if eq .level "" }}System{{ else }}{{ .level }}{{ end }}`
+      template = `{{ if .level }}{{ .level }}{{ else }}System{{ end }}`
     }
 
     stage.labels {
