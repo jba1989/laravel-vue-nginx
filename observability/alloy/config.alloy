@@ -94,15 +94,16 @@ loki.process "docker" {
       }
     }
 
-    // Build a human-readable _msg so VictoriaLogs does not try to JSON-parse
-    // the log line and report "missing _msg field".
-    // Result: GET /api/role/1 200 0.447s
+    // Store a human-readable message in extracted["_msg"] WITHOUT calling
+    // stage.output here. Rewriting the log line inside this match would change
+    // it from "{...}" to "GET /uri 200 0.4s", causing the entry to satisfy the
+    // next selector ({service="nginx"} !~ "^\\{") and be reprocessed by the
+    // nginx error-log branch — which would overwrite any Warning set for 5xx.
+    // The final stage.template at the bottom of this pipeline uses _msg when
+    // set, so the output is still the human-readable string sent to VictoriaLogs.
     stage.template {
       source   = "_msg"
       template = `{{ .method }} {{ .uri }} {{ .status }} {{ .request_time }}s`
-    }
-    stage.output {
-      source = "_msg"
     }
 
     // Prometheus metrics exposed at Alloy's :12345/metrics endpoint.
@@ -355,11 +356,13 @@ loki.process "docker" {
     }
   }
 
-  // Capture the current log line into extracted["_entry"], then use it
-  // as _msg for VictoriaLogs. stage.output requires a non-empty source.
+  // Final output: use the pre-formatted message from extracted["_msg"] when
+  // set (nginx JSON access logs), otherwise fall back to the current log line.
+  // This avoids rewriting the log line inside individual match blocks, which
+  // would cause entries to be re-matched by subsequent selectors.
   stage.template {
     source   = "_entry"
-    template = "{{ .Entry }}"
+    template = `{{ if ._msg }}{{ ._msg }}{{ else }}{{ .Entry }}{{ end }}`
   }
   stage.output {
     source = "_entry"
