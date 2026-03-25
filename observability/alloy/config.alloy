@@ -87,10 +87,11 @@ loki.process "docker" {
 
     stage.labels {
       values = {
-        method      = "method",
-        status      = "status",
-        remote_addr = "remote_addr",
-        uri         = "uri",
+        method       = "method",
+        status       = "status",
+        remote_addr  = "remote_addr",
+        uri          = "uri",
+        request_time = "request_time",
       }
     }
 
