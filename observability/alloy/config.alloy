@@ -87,11 +87,9 @@ loki.process "docker" {
 
     stage.labels {
       values = {
-        method       = "method",
-        status       = "status",
-        remote_addr  = "remote_addr",
-        uri          = "uri",
-        request_time = "request_time",
+        method      = "method",
+        status      = "status",
+        remote_addr = "remote_addr",
       }
     }
 
@@ -182,7 +180,7 @@ loki.process "docker" {
   // 4xx access responses are treated as Info (client-side intent).
   // ----------------------------------------------------------
   stage.match {
-    selector = `{service=~"php|reverb|worker"}`
+    selector = `{service=~"php|reverb|.*worker"}`
 
     // Format 1: Laravel structured log level.
     stage.regex {
