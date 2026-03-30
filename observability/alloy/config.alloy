@@ -76,6 +76,7 @@ loki.process "docker" {
       expressions = {
         method                 = "method",
         uri                    = "uri",
+        route                  = "route",
         status                 = "status",
         request_time           = "request_time",
         upstream_response_time = "upstream_response_time",
@@ -89,6 +90,7 @@ loki.process "docker" {
       values = {
         method      = "method",
         status      = "status",
+        route       = "route",
         remote_addr = "remote_addr",
       }
     }
@@ -102,7 +104,7 @@ loki.process "docker" {
     // set, so the output is still the human-readable string sent to VictoriaLogs.
     stage.template {
       source   = "_msg"
-      template = `{{ .method }} {{ .uri }} {{ .status }} {{ .request_time }}s`
+      template = `{{ .method }} - {{ .route }} - {{ .status }} - {{ .request_time }}s`
     }
 
     // Prometheus metrics exposed at Alloy's :12345/metrics endpoint.
@@ -122,16 +124,16 @@ loki.process "docker" {
       }
     }
 
-    // 4xx = client intent (auth challenge, redirect, not found) — still Info.
-    // Only 5xx server errors are Warning.
+    // 4xx = client intent (auth challenge, redirect, not found) — still info.
+    // Only 5xx server errors are warning.
     stage.static_labels {
-      values = { level = "Info" }
+      values = { level = "info" }
     }
 
     stage.match {
       selector = `{service="nginx", status=~"5[0-9][0-9]"}`
       stage.static_labels {
-        values = { level = "Warning" }
+        values = { level = "warning" }
       }
     }
   }
@@ -158,10 +160,11 @@ loki.process "docker" {
       expression = `" (?P<http_status>5\d\d)(?: |$)`
     }
 
-    // Priority: nginx error level > HTTP 5xx > Info (default).
+    // Priority: nginx error level > HTTP 5xx > info (default).
+    // emerg/alert/crit all map to critical; notice maps to info.
     stage.template {
       source   = "level"
-      template = `{{ if eq .level_raw "emerg" }}Emergency{{ else if eq .level_raw "alert" }}Alert{{ else if eq .level_raw "crit" }}Critical{{ else if eq .level_raw "error" }}Error{{ else if eq .level_raw "warn" }}Warning{{ else if eq .level_raw "notice" }}Notice{{ else if eq .level_raw "info" }}Info{{ else if eq .level_raw "debug" }}Debug{{ else if .http_status }}Warning{{ else }}Info{{ end }}`
+      template = `{{ if eq .level_raw "emerg" }}critical{{ else if eq .level_raw "alert" }}critical{{ else if eq .level_raw "crit" }}critical{{ else if eq .level_raw "error" }}error{{ else if eq .level_raw "warn" }}warning{{ else if eq .level_raw "notice" }}info{{ else if eq .level_raw "info" }}info{{ else if eq .level_raw "debug" }}debug{{ else if .http_status }}warning{{ else }}info{{ end }}`
     }
 
     stage.labels {
@@ -187,14 +190,14 @@ loki.process "docker" {
       expression = `\] \w+\.(?P<level_raw>DEBUG|INFO|WARNING|ERROR|CRITICAL|ALERT|EMERGENCY):`
     }
 
-    // Format 2: PHP access log — only flag 5xx as Warning; 4xx and below → Info.
+    // Format 2: PHP access log — only flag 5xx as warning; 4xx and below → info.
     stage.regex {
       expression = `" (?P<http_status>5\d\d)$`
     }
 
     stage.template {
       source   = "level"
-      template = `{{ if eq .level_raw "EMERGENCY" }}Emergency{{ else if eq .level_raw "ALERT" }}Alert{{ else if eq .level_raw "CRITICAL" }}Critical{{ else if eq .level_raw "ERROR" }}Error{{ else if eq .level_raw "WARNING" }}Warning{{ else if eq .level_raw "INFO" }}Info{{ else if eq .level_raw "DEBUG" }}Debug{{ else if .http_status }}Warning{{ else }}Info{{ end }}`
+      template = `{{ if eq .level_raw "EMERGENCY" }}critical{{ else if eq .level_raw "ALERT" }}critical{{ else if eq .level_raw "CRITICAL" }}critical{{ else if eq .level_raw "ERROR" }}error{{ else if eq .level_raw "WARNING" }}warning{{ else if eq .level_raw "INFO" }}info{{ else if eq .level_raw "DEBUG" }}debug{{ else if .http_status }}warning{{ else }}info{{ end }}`
     }
 
     stage.labels {
@@ -221,7 +224,7 @@ loki.process "docker" {
 
     stage.template {
       source   = "level"
-      template = `{{ $l := .level_raw | lower }}{{ if eq $l "error" }}Error{{ else if eq $l "warn" }}Warning{{ else if eq $l "info" }}Info{{ else if eq $l "debug" }}Debug{{ else if eq $l "fatal" }}Fatal{{ else }}{{ .level_raw }}{{ end }}`
+      template = `{{ $l := .level_raw | lower }}{{ if eq $l "error" }}error{{ else if eq $l "warn" }}warning{{ else if eq $l "info" }}info{{ else if eq $l "debug" }}debug{{ else if eq $l "fatal" }}critical{{ else }}info{{ end }}`
     }
 
     stage.labels {
@@ -246,10 +249,11 @@ loki.process "docker" {
       expression = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z (?P<level_raw>TRC|DBG|INF|WRN|ERR|FTL) `
     }
 
-    // Map abbreviated levels to standard names Grafana recognises.
+    // Map abbreviated levels to standard names Grafana/VictoriaLogs recognises.
+    // FTL (fatal) → critical; TRC → trace.
     stage.template {
       source   = "level"
-      template = `{{ if eq .level_raw "WRN" }}Warning{{ else if eq .level_raw "ERR" }}Error{{ else if eq .level_raw "INF" }}Info{{ else if eq .level_raw "DBG" }}Debug{{ else if eq .level_raw "TRC" }}Trace{{ else if eq .level_raw "FTL" }}Fatal{{ else }}{{ .level_raw }}{{ end }}`
+      template = `{{ if eq .level_raw "WRN" }}warning{{ else if eq .level_raw "ERR" }}error{{ else if eq .level_raw "INF" }}info{{ else if eq .level_raw "DBG" }}debug{{ else if eq .level_raw "TRC" }}trace{{ else if eq .level_raw "FTL" }}critical{{ else }}info{{ end }}`
     }
 
     stage.labels {
@@ -294,16 +298,16 @@ loki.process "docker" {
       }
     }
 
-    // 4xx = blocked bots / auth failures — expected behaviour, treat as Info.
-    // Only 5xx server errors are Warning.
+    // 4xx = blocked bots / auth failures — expected behaviour, treat as info.
+    // Only 5xx server errors are warning.
     stage.static_labels {
-      values = { level = "Info" }
+      values = { level = "info" }
     }
 
     stage.match {
       selector = `{service="wordpress", status=~"5[0-9][0-9]"}`
       stage.static_labels {
-        values = { level = "Warning" }
+        values = { level = "warning" }
       }
     }
   }
@@ -323,7 +327,7 @@ loki.process "docker" {
 
     stage.template {
       source   = "level"
-      template = `{{ if eq .level_char "#" }}Warning{{ else if eq .level_char "-" }}Debug{{ else if eq .level_char "." }}Debug{{ else }}Info{{ end }}`
+      template = `{{ if eq .level_char "#" }}warning{{ else if eq .level_char "-" }}debug{{ else if eq .level_char "." }}debug{{ else }}info{{ end }}`
     }
 
     stage.labels {
@@ -335,19 +339,20 @@ loki.process "docker" {
   // MYSQL: extract level from bracketed token
   //
   // Format: 2026-03-22T05:20:57Z 0 [Warning] [MY-010068] [Server] msg
-  // Levels (already Title Case): Note, Warning, Error, System
+  // Native levels: Note, Warning, Error, System
+  // Mapping: Note/System → info, Warning → warning, Error → error
   // ----------------------------------------------------------
   stage.match {
     selector = `{service="mysql"}`
 
     stage.regex {
-      expression = `\[(?P<level>Note|Warning|Error|System)\]`
+      expression = `\[(?P<level_raw>Note|Warning|Error|System)\]`
     }
 
-    // Default to "Info" when no bracketed level token is found.
+    // Map MySQL native levels to standard; default info when no token found.
     stage.template {
       source   = "level"
-      template = `{{ if .level }}{{ .level }}{{ else }}System{{ end }}`
+      template = `{{ if eq .level_raw "Error" }}error{{ else if eq .level_raw "Warning" }}warning{{ else }}info{{ end }}`
     }
 
     stage.labels {
@@ -404,7 +409,7 @@ loki.process "mysql_slowlog" {
   stage.static_labels {
     values = {
       log_type = "slow_query",
-      level    = "Warning",
+      level    = "warning",
     }
   }
 
