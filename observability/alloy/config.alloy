@@ -76,10 +76,13 @@ loki.process "docker" {
       expressions = {
         method                 = "method",
         uri                    = "uri",
+        route                  = "route",
         status                 = "status",
         request_time           = "request_time",
         upstream_response_time = "upstream_response_time",
         remote_addr            = "remote_addr",
+        bytes_sent             = "bytes_sent",
+        http_user_agent        = "http_user_agent",
       }
     }
 
@@ -87,8 +90,21 @@ loki.process "docker" {
       values = {
         method      = "method",
         status      = "status",
+        route       = "route",
         remote_addr = "remote_addr",
       }
+    }
+
+    // Store a human-readable message in extracted["_msg"] WITHOUT calling
+    // stage.output here. Rewriting the log line inside this match would change
+    // it from "{...}" to "GET /uri 200 0.4s", causing the entry to satisfy the
+    // next selector ({service="nginx"} !~ "^\\{") and be reprocessed by the
+    // nginx error-log branch — which would overwrite any Warning set for 5xx.
+    // The final stage.template at the bottom of this pipeline uses _msg when
+    // set, so the output is still the human-readable string sent to VictoriaLogs.
+    stage.template {
+      source   = "_msg"
+      template = `{{ .method }} - {{ .route }} - {{ .status }} - {{ .request_time }}s`
     }
 
     // Prometheus metrics exposed at Alloy's :12345/metrics endpoint.
@@ -108,19 +124,17 @@ loki.process "docker" {
       }
     }
 
-    // Mark 4xx/5xx with level=error so Grafana colour-codes them.
-    stage.match {
-      selector = `{service="nginx", status=~"[45][0-9][0-9]"}`
-      stage.static_labels {
-        values = { level = "Error" }
-      }
+    // 4xx = client intent (auth challenge, redirect, not found) — still info.
+    // Only 5xx server errors are warning.
+    stage.static_labels {
+      values = { level = "info" }
     }
 
-    // Drop 2xx/3xx — not useful for log search.
     stage.match {
-      selector            = `{service="nginx", status!~"[45][0-9][0-9]"}`
-      action              = "drop"
-      drop_counter_reason = "nginx_non_error_status"
+      selector = `{service="nginx", status=~"5[0-9][0-9]"}`
+      stage.static_labels {
+        values = { level = "warning" }
+      }
     }
   }
 
@@ -135,61 +149,59 @@ loki.process "docker" {
 
     stage.decolorize {}
 
+    // nginx error log: 2026/03/22 04:12:31 [error] 1#1: message
     stage.regex {
       expression = `\[(?P<level_raw>debug|info|notice|warn|error|crit|alert|emerg)\]`
     }
 
+    // nginx / php-fpm text access log: IP - [time] "REQUEST" STATUS [bytes ...]
+    // Only capture 5xx; 4xx and below are treated as Info.
+    stage.regex {
+      expression = `" (?P<http_status>5\d\d)(?: |$)`
+    }
+
+    // Priority: nginx error level > HTTP 5xx > info (default).
+    // emerg/alert/crit all map to critical; notice maps to info.
     stage.template {
       source   = "level"
-      template = `{{ if eq .level_raw "emerg" }}Emergency{{ else if eq .level_raw "alert" }}Alert{{ else if eq .level_raw "crit" }}Critical{{ else if eq .level_raw "error" }}Error{{ else if eq .level_raw "warn" }}Warning{{ else if eq .level_raw "notice" }}Notice{{ else if eq .level_raw "info" }}Info{{ else if eq .level_raw "debug" }}Debug{{ else }}{{ .level_raw }}{{ end }}`
+      template = `{{ if eq .level_raw "emerg" }}critical{{ else if eq .level_raw "alert" }}critical{{ else if eq .level_raw "crit" }}critical{{ else if eq .level_raw "error" }}error{{ else if eq .level_raw "warn" }}warning{{ else if eq .level_raw "notice" }}info{{ else if eq .level_raw "info" }}info{{ else if eq .level_raw "debug" }}debug{{ else if .http_status }}warning{{ else }}info{{ end }}`
     }
 
     stage.labels {
       values = { level = "level" }
-    }
-
-    // Drop debug and info — not actionable.
-    stage.match {
-      selector            = `{service="nginx"} !~ "\\[(warn|error|crit|alert|emerg)\\]"`
-      action              = "drop"
-      drop_counter_reason = "nginx_error_log_below_warn"
     }
   }
 
   // ----------------------------------------------------------
-  // LARAVEL (php / reverb containers): error logs + runner INFO
+  // LARAVEL (php / reverb / worker containers)
   //
-  // Laravel stderr channel outputs to Docker logs.
-  // Format: [YYYY-MM-DD HH:MM:SS] env.LEVEL: message
+  // Two log formats coexist in these containers:
+  //   1. Laravel structured:  [YYYY-MM-DD HH:MM:SS] env.LEVEL: message
+  //   2. PHP access log:      IP -  DATE "METHOD URI" STATUS
+  //
+  // Priority: Laravel level > HTTP 5xx > Info (default).
+  // 4xx access responses are treated as Info (client-side intent).
   // ----------------------------------------------------------
   stage.match {
-    selector = `{service=~"php|reverb"}`
+    selector = `{service=~"php|reverb|.*worker"}`
 
+    // Format 1: Laravel structured log level.
     stage.regex {
       expression = `\] \w+\.(?P<level_raw>DEBUG|INFO|WARNING|ERROR|CRITICAL|ALERT|EMERGENCY):`
     }
 
+    // Format 2: PHP access log — only flag 5xx as warning; 4xx and below → info.
+    stage.regex {
+      expression = `" (?P<http_status>5\d\d)$`
+    }
+
     stage.template {
       source   = "level"
-      template = `{{ if eq .level_raw "EMERGENCY" }}Emergency{{ else if eq .level_raw "ALERT" }}Alert{{ else if eq .level_raw "CRITICAL" }}Critical{{ else if eq .level_raw "ERROR" }}Error{{ else if eq .level_raw "WARNING" }}Warning{{ else if eq .level_raw "INFO" }}Info{{ else if eq .level_raw "DEBUG" }}Debug{{ else }}{{ .level_raw }}{{ end }}`
+      template = `{{ if eq .level_raw "EMERGENCY" }}critical{{ else if eq .level_raw "ALERT" }}critical{{ else if eq .level_raw "CRITICAL" }}critical{{ else if eq .level_raw "ERROR" }}error{{ else if eq .level_raw "WARNING" }}warning{{ else if eq .level_raw "INFO" }}info{{ else if eq .level_raw "DEBUG" }}debug{{ else if .http_status }}warning{{ else }}info{{ end }}`
     }
 
     stage.labels {
       values = { level = "level" }
-    }
-
-    // Drop Debug — too noisy, not actionable.
-    stage.match {
-      selector            = `{service=~"php|reverb", level="Debug"}`
-      action              = "drop"
-      drop_counter_reason = "laravel_debug_filtered"
-    }
-
-    // Drop lines with no recognised Laravel log level (framework/boot noise).
-    stage.match {
-      selector            = `{service=~"php|reverb"} !~ "\\] \\w+\\.(DEBUG|INFO|WARNING|ERROR|CRITICAL|ALERT|EMERGENCY):"`
-      action              = "drop"
-      drop_counter_reason = "laravel_no_level"
     }
   }
 
@@ -212,7 +224,7 @@ loki.process "docker" {
 
     stage.template {
       source   = "level"
-      template = `{{ $l := .level_raw | lower }}{{ if eq $l "error" }}Error{{ else if eq $l "warn" }}Warning{{ else if eq $l "info" }}Info{{ else if eq $l "debug" }}Debug{{ else if eq $l "fatal" }}Fatal{{ else }}{{ .level_raw }}{{ end }}`
+      template = `{{ $l := .level_raw | lower }}{{ if eq $l "error" }}error{{ else if eq $l "warn" }}warning{{ else if eq $l "info" }}info{{ else if eq $l "debug" }}debug{{ else if eq $l "fatal" }}critical{{ else }}info{{ end }}`
     }
 
     stage.labels {
@@ -237,21 +249,89 @@ loki.process "docker" {
       expression = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z (?P<level_raw>TRC|DBG|INF|WRN|ERR|FTL) `
     }
 
-    // Map abbreviated levels to standard names Grafana recognises.
+    // Map abbreviated levels to standard names Grafana/VictoriaLogs recognises.
+    // FTL (fatal) → critical; TRC → trace.
     stage.template {
       source   = "level"
-      template = `{{ if eq .level_raw "WRN" }}Warning{{ else if eq .level_raw "ERR" }}Error{{ else if eq .level_raw "INF" }}Info{{ else if eq .level_raw "DBG" }}Debug{{ else if eq .level_raw "TRC" }}Trace{{ else if eq .level_raw "FTL" }}Fatal{{ else }}{{ .level_raw }}{{ end }}`
+      template = `{{ if eq .level_raw "WRN" }}warning{{ else if eq .level_raw "ERR" }}error{{ else if eq .level_raw "INF" }}info{{ else if eq .level_raw "DBG" }}debug{{ else if eq .level_raw "TRC" }}trace{{ else if eq .level_raw "FTL" }}critical{{ else }}info{{ end }}`
     }
 
     stage.labels {
       values = { level = "level" }
     }
+  }
 
-    // Drop trace, debug, info — only warn and above for Traefik.
+  // ----------------------------------------------------------
+  // WORDPRESS: Apache combined log format (stdout)
+  //
+  // Format: remote_addr - - [time] "METHOD uri HTTP/x.x" status bytes "referer" "ua"
+  // Parses request fields, generates Prometheus metrics, marks
+  // 4xx/5xx as Error and 2xx/3xx as Info.
+  // ----------------------------------------------------------
+  stage.match {
+    selector = `{service="wordpress"}`
+
+    stage.regex {
+      expression = `^(?P<remote_addr>\S+) \S+ \S+ \[[^\]]+\] "(?P<method>\S+) (?P<uri>\S*) [^"]*" (?P<status>\d+) (?P<bytes_sent>\d+) "(?P<referer>[^"]*)" "(?P<user_agent>[^"]*)"`
+    }
+
+    stage.labels {
+      values = {
+        method      = "method",
+        status      = "status",
+        remote_addr = "remote_addr",
+      }
+    }
+
+    stage.metrics {
+      metric.histogram {
+        name        = "wordpress_response_size_bytes"
+        description = "WordPress HTTP response size in bytes"
+        source      = "bytes_sent"
+        buckets     = [256, 512, 1024, 4096, 16384, 65536, 262144, 1048576]
+      }
+      metric.counter {
+        name        = "wordpress_http_requests_total"
+        description = "Total WordPress HTTP requests by method and status"
+        match_all   = true
+        action      = "inc"
+      }
+    }
+
+    // 4xx = blocked bots / auth failures — expected behaviour, treat as info.
+    // Only 5xx server errors are warning.
+    stage.static_labels {
+      values = { level = "info" }
+    }
+
     stage.match {
-      selector            = `{service="traefik", level=~"Trace|Debug|Info"}`
-      action              = "drop"
-      drop_counter_reason = "traefik_below_warn"
+      selector = `{service="wordpress", status=~"5[0-9][0-9]"}`
+      stage.static_labels {
+        values = { level = "warning" }
+      }
+    }
+  }
+
+  // ----------------------------------------------------------
+  // REDIS: map single-character level markers
+  //
+  // Format: PID:ROLE DD Mon YYYY HH:MM:SS.mmm CHAR message
+  // Level chars:  . (debug)   - (verbose)   * (notice/info)   # (warning)
+  // ----------------------------------------------------------
+  stage.match {
+    selector = `{service="redis"}`
+
+    stage.regex {
+      expression = `\d+:[A-Z] \d+ \w+ \d+ \d+:\d+:\d+\.\d+ (?P<level_char>[.*#\-]) `
+    }
+
+    stage.template {
+      source   = "level"
+      template = `{{ if eq .level_char "#" }}warning{{ else if eq .level_char "-" }}debug{{ else if eq .level_char "." }}debug{{ else }}info{{ end }}`
+    }
+
+    stage.labels {
+      values = { level = "level" }
     }
   }
 
@@ -259,13 +339,20 @@ loki.process "docker" {
   // MYSQL: extract level from bracketed token
   //
   // Format: 2026-03-22T05:20:57Z 0 [Warning] [MY-010068] [Server] msg
-  // Levels (already Title Case): Note, Warning, Error, System
+  // Native levels: Note, Warning, Error, System
+  // Mapping: Note/System → info, Warning → warning, Error → error
   // ----------------------------------------------------------
   stage.match {
     selector = `{service="mysql"}`
 
     stage.regex {
-      expression = `\[(?P<level>Note|Warning|Error|System)\]`
+      expression = `\[(?P<level_raw>Note|Warning|Error|System)\]`
+    }
+
+    // Map MySQL native levels to standard; default info when no token found.
+    stage.template {
+      source   = "level"
+      template = `{{ if eq .level_raw "Error" }}error{{ else if eq .level_raw "Warning" }}warning{{ else }}info{{ end }}`
     }
 
     stage.labels {
@@ -273,15 +360,16 @@ loki.process "docker" {
     }
   }
 
-  // ----------------------------------------------------------
-  // ALL OTHER services (redis, …):
-  // keep only warning-and-above messages.
-  // nginx, php, reverb, node, traefik, mysql already handled above.
-  // ----------------------------------------------------------
-  stage.match {
-    selector            = `{service!~"nginx|php|reverb|node|traefik|mysql"} !~ "(?i)\\b(warn|warning|error|fatal|panic|critical|alert|emerg|emergency)\\b"`
-    action              = "drop"
-    drop_counter_reason = "non_warning_or_higher"
+  // Final output: use the pre-formatted message from extracted["_msg"] when
+  // set (nginx JSON access logs), otherwise fall back to the current log line.
+  // This avoids rewriting the log line inside individual match blocks, which
+  // would cause entries to be re-matched by subsequent selectors.
+  stage.template {
+    source   = "_entry"
+    template = `{{ if ._msg }}{{ ._msg }}{{ else }}{{ .Entry }}{{ end }}`
+  }
+  stage.output {
+    source = "_entry"
   }
 
   forward_to = [loki.write.victorialogs.receiver]
@@ -321,8 +409,17 @@ loki.process "mysql_slowlog" {
   stage.static_labels {
     values = {
       log_type = "slow_query",
-      level    = "Warning",
+      level    = "warning",
     }
+  }
+
+  // Capture the current log line as _msg for VictoriaLogs.
+  stage.template {
+    source   = "_entry"
+    template = "{{ .Entry }}"
+  }
+  stage.output {
+    source = "_entry"
   }
 
   forward_to = [loki.write.victorialogs.receiver]
