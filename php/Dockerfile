@@ -19,8 +19,11 @@ RUN cp /usr/local/etc/php/php.ini-production /usr/local/etc/php/php.ini
 
 # Install PHP extensions
 RUN docker-php-source extract && \
-    docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip && \
+    docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip opcache && \
     docker-php-source delete
+
+# Copy custom FPM configuration
+COPY www.conf /usr/local/etc/php-fpm.d/zzz-custom.conf
 
 USER www-data
 
