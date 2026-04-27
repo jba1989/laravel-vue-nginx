@@ -228,14 +228,16 @@ services:
       - alloy-data:/var/lib/alloy/data
       - mysql-slowlog:/var/log/mysql:ro
     environment:
-      VLOGS_PUSH_URL: ${VLOGS_PUSH_URL:-https://victorialogs.example.com/insert/loki/api/v1/push}
-      VLOGS_USERNAME: ${VLOGS_USERNAME:-change-me}
-      VLOGS_PASSWORD: ${VLOGS_PASSWORD:-change-me}
       LOG_HOSTNAME: ${LOG_HOSTNAME:-local-docker-host}
+    networks:
+      - internal-network
+      - monitoring-network
 networks:
   internal-network:
     driver: bridge
   traefik-network:
+    external: true
+  monitoring-network:
     external: true
 
 volumes:

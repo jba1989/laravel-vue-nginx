@@ -1,0 +1,240 @@
+{
+  "title": "Nginx 請求指標",
+  "uid": "nginx-metrics",
+  "schemaVersion": 38,
+  "version": 1,
+  "tags": ["nginx", "metrics"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "annotations": { "list": [] },
+  "links": [],
+  "templating": {
+    "list": [
+      {
+        "name": "interval",
+        "label": "間隔",
+        "type": "interval",
+        "options": [
+          { "selected": false, "text": "30s", "value": "30s" },
+          { "selected": true, "text": "1m", "value": "1m" },
+          { "selected": false, "text": "5m", "value": "5m" },
+          { "selected": false, "text": "10m", "value": "10m" }
+        ],
+        "current": { "selected": true, "text": "1m", "value": "1m" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "總請求數",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "unit": "short",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(nginx_http_requests_total)", "refId": "A", "legendFormat": "總請求" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "目前請求率 (req/s)",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "area" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total[$interval]))", "refId": "A", "legendFormat": "req/s" }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "5xx 錯誤率",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "area" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total{status=~\"5..\"}[$interval])) / sum(rate(nginx_http_requests_total[$interval]))", "refId": "A", "legendFormat": "5xx 比率" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "P99 延遲",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "red", "value": 2 }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "area" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.99, sum(rate(nginx_request_duration_seconds_bucket[$interval])) by (le))", "refId": "A", "legendFormat": "P99" }]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "請求率 (req/s)",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "smooth", "fillOpacity": 10, "gradientMode": "opacity", "spanNulls": false },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "none" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total[$interval]))", "refId": "A", "legendFormat": "全部請求" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total{status=~\"5..\"}[$interval]))", "refId": "B", "legendFormat": "5xx 錯誤" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total{status=~\"4..\"}[$interval]))", "refId": "C", "legendFormat": "4xx 錯誤" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "回應延遲 (P50 / P95 / P99)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "smooth", "fillOpacity": 5, "spanNulls": false },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "none" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.50, sum(rate(nginx_request_duration_seconds_bucket[$interval])) by (le))", "refId": "A", "legendFormat": "P50" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.95, sum(rate(nginx_request_duration_seconds_bucket[$interval])) by (le))", "refId": "B", "legendFormat": "P95" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.99, sum(rate(nginx_request_duration_seconds_bucket[$interval])) by (le))", "refId": "C", "legendFormat": "P99" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "HTTP 狀態碼分布",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "smooth", "fillOpacity": 5, "spanNulls": false },
+          "unit": "reqps"
+        },
+        "overrides": [
+          { "matcher": { "id": "byFrameRefID", "options": "B" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byFrameRefID", "options": "C" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total{status=~\"2..\"}[$interval]))", "refId": "A", "legendFormat": "2xx" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total{status=~\"4..\"}[$interval]))", "refId": "B", "legendFormat": "4xx" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total{status=~\"5..\"}[$interval]))", "refId": "C", "legendFormat": "5xx" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total{status=~\"3..\"}[$interval]))", "refId": "D", "legendFormat": "3xx" }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "各 Route 請求率",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "smooth", "fillOpacity": 0, "spanNulls": false },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total[$interval])) by (route)", "refId": "A", "legendFormat": "{{route}}" }]
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Route 統計 (最近 $interval)",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "req/s" }, "properties": [{ "id": "unit", "value": "reqps" }, { "id": "custom.width", "value": 100 }] },
+          { "matcher": { "id": "byName", "options": "P99 延遲" }, "properties": [{ "id": "unit", "value": "s" }, { "id": "custom.width", "value": 120 }] },
+          { "matcher": { "id": "byName", "options": "5xx 數" }, "properties": [
+            { "id": "unit", "value": "short" },
+            { "id": "custom.cellOptions", "value": { "type": "color-background" } },
+            { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } }
+          ]}
+        ]
+      },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": { "Value #A": "req/s", "Value #B": "P99 延遲", "Value #C": "5xx 數", "route": "Route" },
+            "indexByName": { "route": 0, "Value #A": 1, "Value #B": 2, "Value #C": 3 }
+          }
+        }
+      ],
+      "options": { "showHeader": true, "cellHeight": "sm", "sortBy": [{ "displayName": "req/s", "desc": true }] },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(nginx_http_requests_total[$interval])) by (route)", "refId": "A", "legendFormat": "{{route}}", "instant": true },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.99, sum(rate(nginx_request_duration_seconds_bucket[$interval])) by (le, route))", "refId": "B", "legendFormat": "{{route}}", "instant": true },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(nginx_http_requests_total{status=~\"5..\"}[$interval])) by (route)", "refId": "C", "legendFormat": "{{route}}", "instant": true }
+      ]
+    }
+  ]
+}
