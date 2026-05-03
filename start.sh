@@ -23,7 +23,11 @@ elif [ "$type" = "reverb" ]; then
     php artisan reverb:start --host=0.0.0.0 --port=8080
 elif [ "$type" = "websocket" ]; then
     echo "Running the queue: websocket"
-    php artisan queue:work --verbose --queue=websocket
+    while true; do
+        php artisan queue:work --verbose --queue=websocket --max-time=3600 --sleep=3 --tries=3
+        echo "Websocket worker exited, restarting..."
+        sleep 2
+    done
 elif [ "$type" = "scheduler" ]; then
     echo "Running the scheduler"
     while [ true ]
