@@ -10,4 +10,4 @@ RUN npm install && npm run build
 
 EXPOSE 3000
 
-CMD [ "npm", "run", "start" ]
+CMD ["node", ".output/server/index.mjs"]
