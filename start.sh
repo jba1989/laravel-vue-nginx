@@ -8,22 +8,29 @@ if [ "$type" = "app" ]; then
     exec php-fpm
 elif [ "$type" = "request" ]; then
     echo "Running the queue: request"
-    php artisan queue:work redis --verbose --queue=request --sleep=20 --tries=0
+    exec php artisan queue:work redis --verbose --queue=request --sleep=20 --tries=0
 elif [ "$type" = "emails" ]; then
     echo "Running the queue: emails"
-    php artisan queue:work --verbose --queue=emails --sleep=10 --tries=2
+    exec php artisan queue:work --verbose --queue=emails --sleep=10 --tries=2
 elif [ "$type" = "default" ]; then
     echo "Running the queue: default"
-    php artisan queue:work --verbose --queue=default --sleep=30 --tries=2
+    exec php artisan queue:work --verbose --queue=default --sleep=30 --tries=2
 elif [ "$type" = "simulation" ]; then
     echo "Running the queue: simulation"
-    php artisan queue:work --verbose --queue=simulation --sleep=10 --tries=0
+    exec php artisan queue:work --verbose --queue=simulation --sleep=10 --tries=0
+elif [ "$type" = "laborious" ]; then
+    echo "Running the queue: laborious"
+    exec php artisan queue:work redis --verbose --queue=laborious --sleep=10 --tries=1 --timeout=620
 elif [ "$type" = "reverb" ]; then
     echo "Running Reverb WebSocket server"
-    php artisan reverb:start --host=0.0.0.0 --port=8080
+    exec php artisan reverb:start --host=0.0.0.0 --port=8080
 elif [ "$type" = "websocket" ]; then
     echo "Running the queue: websocket"
-    php artisan queue:work --verbose --queue=websocket
+    while true; do
+        php artisan queue:work --verbose --queue=websocket --max-time=3600 --sleep=3 --tries=3
+        echo "Websocket worker exited, restarting..."
+        sleep 2
+    done
 elif [ "$type" = "scheduler" ]; then
     echo "Running the scheduler"
     while [ true ]
