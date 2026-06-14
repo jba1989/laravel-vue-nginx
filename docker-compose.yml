@@ -56,6 +56,25 @@ services:
       - redis
     networks:
       - internal-network
+  mcp:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    restart: always
+    tty: true
+    working_dir: /var/www
+    volumes:
+      - ./php/app:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - ./start.sh:/var/www/start.sh
+    environment:
+      CONTAINER_TYPE: mcp
+    entrypoint: [ "sh", "start.sh" ]
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - internal-network
   request-worker:
     build:
       context: ./php
