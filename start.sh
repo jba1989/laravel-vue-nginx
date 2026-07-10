@@ -24,9 +24,6 @@ elif [ "$type" = "laborious" ]; then
 elif [ "$type" = "reverb" ]; then
     echo "Running Reverb WebSocket server"
     exec php artisan reverb:start --host=0.0.0.0 --port=8080
-elif [ "$type" = "mcp" ]; then
-    echo "Running MCP server (HTTP transport)"
-    exec php artisan mcp:serve --transport=http --host=0.0.0.0 --port=8090
 elif [ "$type" = "websocket" ]; then
     echo "Running the queue: websocket"
     while true; do
