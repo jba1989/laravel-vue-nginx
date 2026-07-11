@@ -17,7 +17,10 @@ elif [ "$type" = "default" ]; then
     exec php artisan queue:work --verbose --queue=default --sleep=30 --tries=2
 elif [ "$type" = "simulation" ]; then
     echo "Running the queue: simulation"
-    exec php artisan queue:work --verbose --queue=simulation --sleep=10 --tries=0
+    # queue:listen 每個 job 用全新 process，跑完即釋放，避免長時間回測 job 的記憶體污染
+    # retry_after=3700 > timeout=3600（config/queue.php database 連線），避免執行中被誤判卡住而重複派發
+    # tries=0(無限重試) 會讓真失敗的 job 永不進 failed、batch 永不收斂，改為 2
+    exec php artisan queue:listen --verbose --queue=simulation --sleep=10 --tries=2 --timeout=3600
 elif [ "$type" = "laborious" ]; then
     echo "Running the queue: laborious"
     exec php artisan queue:work redis --verbose --queue=laborious --sleep=10 --tries=1 --timeout=620
