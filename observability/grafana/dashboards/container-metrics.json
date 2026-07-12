@@ -1,0 +1,160 @@
+{
+  "title": "容器資源 (cAdvisor)",
+  "uid": "container-metrics",
+  "schemaVersion": 38,
+  "version": 1,
+  "tags": ["docker", "cadvisor"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "annotations": { "list": [] },
+  "links": [],
+  "templating": {
+    "list": [
+      {
+        "name": "container",
+        "label": "容器",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": { "query": "label_values(container_last_seen{name!=\"\"}, name)", "refId": "A" },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "執行中容器數",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "count(container_last_seen{name!=\"\"})", "refId": "A", "legendFormat": "容器" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "容器總記憶體用量",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1073741824 },
+              { "color": "red", "value": 3221225472 }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(container_memory_usage_bytes{name!=\"\"})", "refId": "A", "legendFormat": "總記憶體" }]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "容器 CPU 使用率 (%)",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "smooth", "fillOpacity": 5, "spanNulls": false },
+          "unit": "percent",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(container_cpu_usage_seconds_total{name=~\"$container\"}[2m])) by (name) * 100", "refId": "A", "legendFormat": "{{name}}" }]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "容器記憶體用量",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 10 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "smooth", "fillOpacity": 5, "spanNulls": false },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "container_memory_usage_bytes{name=~\"$container\"}", "refId": "A", "legendFormat": "{{name}}" }]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "容器網路 I/O (bytes/s)",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "smooth", "fillOpacity": 5, "spanNulls": false },
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(container_network_receive_bytes_total{name=~\"$container\"}[5m])) by (name)", "refId": "A", "legendFormat": "{{name}} 接收" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(container_network_transmit_bytes_total{name=~\"$container\"}[5m])) by (name)", "refId": "B", "legendFormat": "{{name}} 傳送" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "容器資源快照",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "CPU %" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "custom.width", "value": 100 }] },
+          { "matcher": { "id": "byName", "options": "記憶體" }, "properties": [{ "id": "unit", "value": "bytes" }, { "id": "custom.width", "value": 120 }] }
+        ]
+      },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": { "renameByName": { "Value #A": "CPU %", "Value #B": "記憶體", "name": "容器" } } }
+      ],
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(container_cpu_usage_seconds_total{name!=\"\"}[2m])) by (name) * 100", "refId": "A", "legendFormat": "{{name}}", "instant": true },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "container_memory_usage_bytes{name!=\"\"}", "refId": "B", "legendFormat": "{{name}}", "instant": true }
+      ]
+    }
+  ]
+}

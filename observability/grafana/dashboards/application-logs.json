@@ -1,0 +1,260 @@
+{
+  "title": "應用程式日誌",
+  "uid": "application-logs",
+  "schemaVersion": 38,
+  "version": 1,
+  "tags": ["logs", "laravel", "loki"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "annotations": { "list": [] },
+  "links": [],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "服務",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values(service)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "current": {}
+      },
+      {
+        "name": "level",
+        "label": "等級",
+        "type": "custom",
+        "options": [
+          { "selected": true, "text": "All", "value": "$__all" },
+          { "selected": false, "text": "error", "value": "error" },
+          { "selected": false, "text": "critical", "value": "critical" },
+          { "selected": false, "text": "warning", "value": "warning" },
+          { "selected": false, "text": "info", "value": "info" },
+          { "selected": false, "text": "debug", "value": "debug" }
+        ],
+        "multi": false,
+        "includeAll": true,
+        "allValue": ".+",
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "日誌量 (依等級)",
+      "gridPos": { "x": 0, "y": 0, "w": 16, "h": 6 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineInterpolation": "smooth", "fillOpacity": 10, "spanNulls": false },
+          "unit": "short"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "error" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "critical" }, "properties": [{ "id": "color", "value": { "fixedColor": "dark-red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "warning" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "info" }, "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "none" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum(count_over_time({job=\"docker\", service=~\"$service\"}[$__interval])) by (level)", "refId": "A", "legendFormat": "{{level}}" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "錯誤數 (本時段)",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 3 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "unit": "short",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum(count_over_time({job=\"docker\", service=~\"$service\", level=~\"error|critical\"}[$__range]))", "refId": "A", "legendFormat": "錯誤" }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "警告數 (本時段)",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 3 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "orange", "value": 50 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum(count_over_time({job=\"docker\", service=~\"$service\", level=\"warning\"}[$__range]))", "refId": "A", "legendFormat": "警告" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "慢查詢數 (本時段)",
+      "gridPos": { "x": 16, "y": 3, "w": 4, "h": 3 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum(count_over_time({job=\"mysql_slowlog\"}[$__range]))", "refId": "A", "legendFormat": "慢查詢" }]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "日誌總量 (本時段)",
+      "gridPos": { "x": 20, "y": 3, "w": 4, "h": 3 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "none" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" }, "expr": "sum(count_over_time({job=\"docker\", service=~\"$service\"}[$__range]))", "refId": "A", "legendFormat": "總量" }]
+    },
+    {
+      "id": 6,
+      "type": "logs",
+      "title": "Laravel / PHP 錯誤日誌",
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" }, "expr": "{job=\"docker\", service=~\"php|.*worker|reverb\", level=~\"$level\"}", "refId": "A", "legendFormat": "" }]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Nginx 存取日誌",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 12 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "center" },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }] }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "level" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "mode": "basic", "type": "color-background" } },
+              { "id": "mappings", "value": [{ "options": { "error": { "color": "red", "index": 0 }, "warning": { "color": "yellow", "index": 1 }, "info": { "color": "blue", "index": 2 } }, "type": "value" }] },
+              { "id": "custom.width", "value": 73 }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "request_time" }, "properties": [{ "id": "unit", "value": "s" }, { "id": "custom.width", "value": 100 }] },
+          { "matcher": { "id": "byName", "options": "status" }, "properties": [{ "id": "custom.width", "value": 70 }] },
+          { "matcher": { "id": "byName", "options": "method" }, "properties": [{ "id": "custom.width", "value": 80 }] },
+          { "matcher": { "id": "byName", "options": "remote_addr" }, "properties": [{ "id": "custom.width", "value": 120 }] },
+          { "matcher": { "id": "byName", "options": "Time" }, "properties": [{ "id": "custom.width", "value": 180 }] },
+          { "matcher": { "id": "byName", "options": "Line" }, "properties": [{ "id": "custom.align", "value": "left" }] }
+        ]
+      },
+      "transformations": [
+        { "id": "extractFields", "options": { "source": "labels" } },
+        {
+          "id": "organize",
+          "options": {
+            "includeByName": { "Time": true, "Line": true, "level": true, "method": true, "remote_addr": true, "request_time": true, "status": true, "uri": true },
+            "indexByName": { "Time": 0, "level": 1, "method": 2, "status": 3, "request_time": 4, "remote_addr": 5, "uri": 6, "Line": 7 }
+          }
+        }
+      ],
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" }, "expr": "{job=\"docker\", service=\"nginx\", level=~\"$level\"}", "refId": "A", "queryType": "range" }]
+    },
+    {
+      "id": 8,
+      "type": "logs",
+      "title": "MySQL 慢查詢日誌",
+      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" }, "expr": "{job=\"mysql_slowlog\"}", "refId": "A", "legendFormat": "" }]
+    },
+    {
+      "id": 9,
+      "type": "logs",
+      "title": "所有服務日誌流",
+      "gridPos": { "x": 0, "y": 38, "w": 24, "h": 12 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "targets": [{ "datasource": { "type": "loki", "uid": "loki" }, "expr": "{job=\"docker\", service=~\"$service\", level=~\"$level\"}", "refId": "A", "legendFormat": "" }]
+    }
+  ]
+}

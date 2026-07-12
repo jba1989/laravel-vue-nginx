@@ -1,264 +1,125 @@
 {
-  "id": 102,
-  "type": "table",
-  "title": "日誌列表 nginx",
-  "gridPos": {
-    "x": 0,
-    "y": 31,
-    "h": 15,
-    "w": 24
-  },
-  "fieldConfig": {
-    "defaults": {
-      "custom": {
-        "align": "center",
-        "footer": {
-          "reducers": []
-        },
-        "cellOptions": {
-          "type": "json-view"
-        },
-        "inspect": false
-      },
-      "mappings": [],
-      "thresholds": {
-        "mode": "absolute",
-        "steps": [
-          {
-            "color": "transparent",
-            "value": null
-          }
-        ]
-      }
-    },
-    "overrides": [
+  "title": "Container Logs - Nginx",
+  "uid": "container-logs",
+  "schemaVersion": 38,
+  "version": 2,
+  "tags": ["logs", "nginx", "loki"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 0,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "annotations": { "list": [] },
+  "links": [],
+  "templating": {
+    "list": [
       {
-        "matcher": {
-          "id": "byName",
-          "options": "level"
-        },
-        "properties": [
-          {
-            "id": "custom.cellOptions",
-            "value": {
-              "mode": "basic",
-              "type": "color-background"
-            }
-          },
-          {
-            "id": "mappings",
-            "value": [
-              {
-                "options": {
-                  "Error": {
-                    "color": "red",
-                    "index": 0
-                  },
-                  "Warning": {
-                    "color": "yellow",
-                    "index": 2
-                  },
-                  "error": {
-                    "color": "red",
-                    "index": 1
-                  },
-                  "warning": {
-                    "color": "yellow",
-                    "index": 3
-                  }
-                },
-                "type": "value"
-              }
-            ]
-          },
-          {
-            "id": "custom.width",
-            "value": 73
-          }
-        ]
+        "name": "compose_project",
+        "label": "Compose Project",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values(compose_project)",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "current": {}
       },
       {
-        "matcher": {
-          "id": "byName",
-          "options": "request_time"
-        },
-        "properties": [
-          {
-            "id": "decimals",
-            "value": 0
-          },
-          {
-            "id": "unit",
-            "value": "s"
-          },
-          {
-            "id": "custom.cellOptions",
-            "value": { "type": "auto" }
-          },
-          {
-            "id": "custom.width",
-            "value": 330
-          }
-        ]
-      },
-      {
-        "matcher": {
-          "id": "byName",
-          "options": "uri"
-        },
-        "properties": [
-          {
-            "id": "custom.align",
-            "value": "left"
-          }
-        ]
-      },
-      {
-        "matcher": {
-          "id": "byName",
-          "options": "Line"
-        },
-        "properties": [
-          {
-            "id": "custom.align",
-            "value": "left"
-          },
-          {
-            "id": "custom.width",
-            "value": 813
-          }
-        ]
-      },
-      {
-        "matcher": {
-          "id": "byName",
-          "options": "Time"
-        },
-        "properties": [
-          {
-            "id": "custom.width",
-            "value": 195
-          }
-        ]
-      },
-      {
-        "matcher": {
-          "id": "byName",
-          "options": "service"
-        },
-        "properties": [
-          {
-            "id": "custom.width",
-            "value": 89
-          }
-        ]
-      },
-      {
-        "matcher": {
-          "id": "byName",
-          "options": "status"
-        },
-        "properties": [
-          {
-            "id": "custom.width",
-            "value": 78
-          }
-        ]
-      },
-      {
-        "matcher": {
-          "id": "byName",
-          "options": "method"
-        },
-        "properties": [
-          {
-            "id": "custom.width",
-            "value": 80
-          }
-        ]
-      },
-      {
-        "matcher": {
-          "id": "byName",
-          "options": "remote_addr"
-        },
-        "properties": [
-          {
-            "id": "custom.width",
-            "value": 108
-          }
-        ]
-      },
-      {
-        "matcher": {
-          "id": "byName",
-          "options": "service"
-        },
-        "properties": [
-          {
-            "id": "custom.cellOptions",
-            "value": {
-              "type": "pill"
-            }
-          }
-        ]
+        "name": "level",
+        "label": "等級",
+        "type": "custom",
+        "options": [
+          { "selected": true, "text": "All", "value": "$__all" },
+          { "selected": false, "text": "error", "value": "error" },
+          { "selected": false, "text": "critical", "value": "critical" },
+          { "selected": false, "text": "warning", "value": "warning" },
+          { "selected": false, "text": "info", "value": "info" }
+        ],
+        "multi": false,
+        "includeAll": true,
+        "allValue": ".+",
+        "current": { "selected": true, "text": "All", "value": "$__all" }
       }
     ]
   },
-  "transformations": [
+  "panels": [
     {
-      "id": "extractFields",
-      "options": {
-        "source": "labels"
-      }
-    },
-    {
-      "id": "organize",
-      "options": {
-        "includeByName": {
-          "Line": true,
-          "Time": true,
-          "level": true,
-          "method": true,
-          "remote_addr": true,
-          "request_time": true,
-          "service": true,
-          "status": true,
-          "uri": true
+      "id": 102,
+      "type": "table",
+      "title": "日誌列表 nginx",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 20 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center",
+            "footer": { "reducers": [] },
+            "cellOptions": { "type": "json-view" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }] }
         },
-        "indexByName": {
-          "Line": 3,
-          "Time": 0,
-          "level": 2,
-          "method": 7,
-          "remote_addr": 5,
-          "request_time": 4,
-          "service": 1,
-          "status": 6,
-          "uri": 8
-        }
-      }
-    }
-  ],
-  "pluginVersion": "12.4.0-21693836646",
-  "targets": [
-    {
-      "datasource": {
-        "type": "victoriametrics-logs-datasource",
-        "uid": "$datasource"
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "level" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "mode": "basic", "type": "color-background" } },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "Error": { "color": "red", "index": 0 },
+                      "Warning": { "color": "yellow", "index": 2 },
+                      "error": { "color": "red", "index": 1 },
+                      "warning": { "color": "yellow", "index": 3 }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              { "id": "custom.width", "value": 73 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "request_time" },
+            "properties": [
+              { "id": "decimals", "value": 0 },
+              { "id": "unit", "value": "s" },
+              { "id": "custom.cellOptions", "value": { "type": "auto" } },
+              { "id": "custom.width", "value": 330 }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "uri" }, "properties": [{ "id": "custom.align", "value": "left" }] },
+          { "matcher": { "id": "byName", "options": "Line" }, "properties": [{ "id": "custom.align", "value": "left" }, { "id": "custom.width", "value": 813 }] },
+          { "matcher": { "id": "byName", "options": "Time" }, "properties": [{ "id": "custom.width", "value": 195 }] },
+          { "matcher": { "id": "byName", "options": "service" }, "properties": [{ "id": "custom.width", "value": 89 }, { "id": "custom.cellOptions", "value": { "type": "pill" } }] },
+          { "matcher": { "id": "byName", "options": "status" }, "properties": [{ "id": "custom.width", "value": 78 }] },
+          { "matcher": { "id": "byName", "options": "method" }, "properties": [{ "id": "custom.width", "value": 80 }] },
+          { "matcher": { "id": "byName", "options": "remote_addr" }, "properties": [{ "id": "custom.width", "value": 108 }] }
+        ]
       },
-      "editorMode": "code",
-      "expr": "compose_project: \"$compose_project\" service: \"nginx\" level: \"$level\"",
-      "queryType": "instant",
-      "refId": "A"
+      "transformations": [
+        { "id": "extractFields", "options": { "source": "labels" } },
+        {
+          "id": "organize",
+          "options": {
+            "includeByName": { "Line": true, "Time": true, "level": true, "method": true, "remote_addr": true, "request_time": true, "service": true, "status": true, "uri": true },
+            "indexByName": { "Time": 0, "service": 1, "level": 2, "Line": 3, "request_time": 4, "remote_addr": 5, "status": 6, "method": 7, "uri": 8 }
+          }
+        }
+      ],
+      "options": { "showHeader": true, "cellHeight": "sm" },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "editorMode": "code",
+          "expr": "{job=\"docker\", compose_project=\"$compose_project\", service=\"nginx\", level=~\"$level\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ]
     }
-  ],
-  "datasource": {
-    "type": "victoriametrics-logs-datasource",
-    "uid": "$datasource"
-  },
-  "options": {
-    "showHeader": true,
-    "cellHeight": "sm"
-  }
+  ]
 }
